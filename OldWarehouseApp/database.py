@@ -313,7 +313,7 @@ def set_item_notes(inv_id: int, notes: str, user: str):
 
 
 def get_distinct_values(col: str):
-    allowed = {"Storage", "Area", "Bin", "Pn"}
+    allowed = {"Storage", "Area", "Bin", "Pn", "DestArea"}
     if col not in allowed:
         return []
     with get_conn() as c:

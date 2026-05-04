@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QRect, QTimer
 from PyQt6.QtGui import QFont, QColor, QBrush, QPainter, QPainterPath
 from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from PyQt6.QtGui import QDoubleValidator
-from collections import Counter
+from collections import Counter  # noqa: F401 (kept for potential future use)
 import database as db
 
 MAX_ROWS = 500
@@ -158,6 +158,16 @@ class InventoryScreen(QWidget):
         self.cmb_bin.setCompleter(_cb)
         self.cmb_bin.currentIndexChanged.connect(self._search)
 
+        self.cmb_dest = QComboBox(); self.cmb_dest.setMinimumHeight(36)
+        self.cmb_dest.setEditable(True)
+        self.cmb_dest.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        _cd = QCompleter(self.cmb_dest.model(), self.cmb_dest)
+        _cd.setFilterMode(Qt.MatchFlag.MatchContains)
+        _cd.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        _cd.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.cmb_dest.setCompleter(_cd)
+        self.cmb_dest.currentIndexChanged.connect(self._search)
+
         self.cmb_filter_pallet = QComboBox(); self.cmb_filter_pallet.setMinimumHeight(36)
         self.cmb_filter_pallet.setEditable(True)
         self.cmb_filter_pallet.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
@@ -171,6 +181,7 @@ class InventoryScreen(QWidget):
         filter_row.addWidget(_filter_card("🔍  מס' קטלוגי", self.txt_pn))
         filter_row.addWidget(_filter_card("🏷  PN",          self.txt_cat))
         filter_row.addWidget(_filter_card("📍  איתור",       self.cmb_bin))
+        filter_row.addWidget(_filter_card("🎯  אזור יעד",    self.cmb_dest))
         filter_row.addWidget(_filter_card("📦  משטח",        self.cmb_filter_pallet))
 
         btn_clear = QPushButton("נקה")
@@ -274,7 +285,7 @@ class InventoryScreen(QWidget):
 
         root.addWidget(assign_frame)
 
-        legend = QLabel("** מקרא חיוויים **\n❗ = קיים פריט זהה (PN + Bin) במספר שורות")
+        legend = QLabel("** מקרא חיוויים **\n❗ = PN קיים במספר איתורים שונים")
         legend.setObjectName("status_label")
         legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(legend)
@@ -291,6 +302,16 @@ class InventoryScreen(QWidget):
         idx = self.cmb_bin.findText(prev)
         self.cmb_bin.setCurrentIndex(idx if idx >= 0 else 0)
         self.cmb_bin.blockSignals(False)
+
+        prev_d = self.cmb_dest.currentText()
+        self.cmb_dest.blockSignals(True)
+        self.cmb_dest.clear()
+        self.cmb_dest.addItem("")
+        for v in db.get_distinct_values("DestArea"):
+            self.cmb_dest.addItem(v)
+        idx_d = self.cmb_dest.findText(prev_d)
+        self.cmb_dest.setCurrentIndex(idx_d if idx_d >= 0 else 0)
+        self.cmb_dest.blockSignals(False)
 
         prev_p = self.cmb_filter_pallet.currentText()
         self.cmb_filter_pallet.blockSignals(True)
@@ -336,9 +357,10 @@ class InventoryScreen(QWidget):
         self.cmb_filter_pallet.blockSignals(False)
 
     def _search(self):
-        pn      = self.txt_pn.text().strip()
-        cat     = self.txt_cat.text().strip()
-        bin_    = self.cmb_bin.currentText() if self.cmb_bin.currentIndex() > 0 else ""
+        pn       = self.txt_pn.text().strip()
+        cat      = self.txt_cat.text().strip()
+        bin_     = self.cmb_bin.currentText() if self.cmb_bin.currentIndex() > 0 else ""
+        dest     = self.cmb_dest.currentText() if self.cmb_dest.currentIndex() > 0 else ""
         pallet_f = self.cmb_filter_pallet.currentData()
 
         self.lbl_title.setText(
@@ -349,6 +371,8 @@ class InventoryScreen(QWidget):
         all_rows = db.get_inventory_with_assignments(pn, "", "", bin_, MAX_ROWS)
         if cat:
             all_rows = [r for r in all_rows if cat.lower() in str(r["Cat"] or "").lower()]
+        if dest:
+            all_rows = [r for r in all_rows if dest.lower() in str(r["DestArea"] or "").lower()]
         if pallet_f is not None:
             all_rows = [r for r in all_rows if r["PalletID"] == pallet_f]
         if self.chk_no_pallet.isChecked():
@@ -362,7 +386,7 @@ class InventoryScreen(QWidget):
     def _clear_filter(self):
         self.txt_pn.clear()
         self.txt_cat.clear()
-        for cmb in (self.cmb_bin, self.cmb_filter_pallet):
+        for cmb in (self.cmb_bin, self.cmb_dest, self.cmb_filter_pallet):
             cmb.blockSignals(True); cmb.setCurrentIndex(0); cmb.blockSignals(False)
         self.chk_no_pallet.blockSignals(True)
         self.chk_no_pallet.setChecked(False)
@@ -400,8 +424,10 @@ class InventoryScreen(QWidget):
             msg += f"  ← מוצגים {MAX_ROWS} הראשונים בלבד"
         self.lbl_count.setText(msg)
 
-        key_counts = Counter((row["Pn"], row["Bin"]) for row in rows)
-        dup_keys   = {k for k, cnt in key_counts.items() if cnt > 1}
+        pn_to_bins = {}
+        for row in rows:
+            pn_to_bins.setdefault(row["Pn"], set()).add(row["Bin"])
+        multi_loc_pns = {pn for pn, bins in pn_to_bins.items() if len(bins) > 1}
 
         self.table.blockSignals(True)
         self.table.setUpdatesEnabled(False)
@@ -453,7 +479,7 @@ class InventoryScreen(QWidget):
             self.table.setItem(r, COL_PAL, mk(str(pallet_id) if pallet_id is not None else "–"))
 
             # ── Indicator ❗ ───────────────────────────────────────────────────
-            is_dup = (row["Pn"], row["Bin"]) in dup_keys
+            is_dup = row["Pn"] in multi_loc_pns
             if is_dup:
                 ind = mk("❗")
                 ind.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
@@ -608,19 +634,13 @@ class InventoryScreen(QWidget):
     def _show_dup_popup(self, r: int):
         if r >= len(self._rows):
             return
-        row     = self._rows[r]
-        pn      = row["Pn"]
-        bin_    = row["Bin"]
-        dups    = [i for i, rd in enumerate(self._rows)
-                   if rd["Pn"] == pn and rd["Bin"] == bin_]
-        lines   = [f"פריט: {pn}  |  Bin: {bin_}",
-                   f"מספר שורות זהות: {len(dups)}"]
-        for i in dups:
-            rd      = self._rows[i]
-            pid     = rd["PalletID"]
-            pal_str = f"משטח: {pid}" if pid is not None else "ללא משטח"
-            lines.append(f"  • {pal_str}")
-        QMessageBox.information(self, "חיווי כפילויות", "\n".join(lines))
+        row  = self._rows[r]
+        pn   = row["Pn"]
+        bins = sorted({rd["Bin"] for rd in self._rows if rd["Pn"] == pn and rd["Bin"]})
+        lines = [f"פריט: {pn}", f"קיים ב-{len(bins)} איתורים שונים:"]
+        for b in bins:
+            lines.append(f"  • {b}")
+        QMessageBox.information(self, "חיווי מספר איתורים", "\n".join(lines))
 
     # ── Updated qty dialog ────────────────────────────────────────────────────
 
@@ -776,8 +796,8 @@ class InventoryScreen(QWidget):
 
         html  = """<html><head><meta charset="utf-8">
         <style>
-          body { font-family: Arial, sans-serif; direction: rtl; font-size: 9pt; }
-          h2   { text-align: center; font-size: 11pt; margin-bottom: 6px; }
+          body { font-family: Arial, sans-serif; direction: rtl; font-size: 11pt; }
+          h2   { text-align: center; font-size: 13pt; margin-bottom: 6px; }
           table { border-collapse: collapse; width: 100%; }
           th { background: #1976D2; color: white; padding: 4px 6px; border: 1px solid #90A4AE; }
           td { padding: 3px 6px; border: 1px solid #CFD8DC; }

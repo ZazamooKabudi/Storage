@@ -369,6 +369,8 @@ class SettingsScreen(QWidget):
 
         if hasattr(self.parent(), "update_status"):
             self.parent().update_status()
+        if hasattr(self.parent(), "inventory_screen"):
+            self.parent().inventory_screen._refresh_filter_combos()
 
         QMessageBox.information(self, "הצלחה", f"נטענו {len(rows)} פריטים בהצלחה ✓")
 
