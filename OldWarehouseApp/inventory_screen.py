@@ -509,7 +509,7 @@ class InventoryScreen(QWidget):
             qty_str = (str(int(qty_val)) if qty_val == int(qty_val) else str(qty_val)) if qty_val is not None else ""
 
             pn_item = mk(row["Pn"], bold=True)
-            if str(row.get("Serial") or "").strip() == "Z001":
+            if str(row.get("Serial") or "").strip():
                 pn_item.setBackground(QBrush(QColor("#FF8C00")))
             self.table.setItem(r, COL_PN,    pn_item)
             self.table.setItem(r, COL_CAT,   mk(row["Cat"]))

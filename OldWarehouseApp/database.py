@@ -273,7 +273,7 @@ def get_inventory_with_assignments(pn="", storage="", area="", bin_="",
     sql = """
         SELECT i.InventoryID, i.Cat, i.Pn, i.UnitOfMeasure, i.Batch, i.WBS,
                i.Storage, i.Area, i.Bin, i.DestArea, i.Qty, i.MultiLocation,
-               i.IsInStock, i.UpdatedQty, i.Notes,
+               i.IsInStock, i.UpdatedQty, i.Notes, i.Serial,
                pa.PalletID, pa.AssignDate
         FROM InventoryOld i
         LEFT JOIN PALLET_Assignment pa ON i.InventoryID = pa.InventoryID
