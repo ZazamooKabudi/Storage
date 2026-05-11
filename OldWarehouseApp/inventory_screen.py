@@ -844,8 +844,8 @@ class InventoryScreen(QWidget):
 
         html  = """<html><head><meta charset="utf-8">
         <style>
-          body { font-family: Arial, sans-serif; direction: rtl; font-size: 11pt; }
-          h2   { text-align: center; font-size: 13pt; margin-bottom: 6px; }
+          body { font-family: Arial, sans-serif; direction: rtl; font-size: 14pt; }
+          h2   { text-align: center; font-size: 17pt; margin-bottom: 6px; }
           table { border-collapse: collapse; width: 100%; }
           th { background: #1976D2; color: white; padding: 4px 6px; border: 1px solid #90A4AE; }
           td { padding: 3px 6px; border: 1px solid #CFD8DC; }
