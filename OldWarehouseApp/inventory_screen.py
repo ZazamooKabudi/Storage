@@ -11,7 +11,7 @@ from PyQt6.QtGui import QDoubleValidator
 from collections import Counter  # noqa: F401 (kept for potential future use)
 import database as db
 
-MAX_ROWS = 500
+PAGE_SIZE = 300
 
 # ── Column indices (RTL: col 0 = rightmost on screen) ────────────────────────
 COL_CHK     = 0   # ✓ בחירה
@@ -105,10 +105,12 @@ class ToggleSwitch(QWidget):
 class InventoryScreen(QWidget):
     def __init__(self, username: str):
         super().__init__()
-        self.username  = username
-        self._rows: list = []
-        self._sort_col   = -1
-        self._sort_asc   = True
+        self.username        = username
+        self._rows: list         = []
+        self._filtered_rows: list = []
+        self._page               = 0
+        self._sort_col           = -1
+        self._sort_asc           = True
         self._build_ui()
         self._refresh_filter_combos()
         self.lbl_count.setText("טוען נתונים...")
@@ -241,6 +243,29 @@ class InventoryScreen(QWidget):
         self.lbl_count.setStyleSheet("font-size: 12px; color: #757575;")
         root.addWidget(self.lbl_count)
 
+        # ── Paging bar ────────────────────────────────────────────────────────
+        paging_row = QHBoxLayout()
+        paging_row.setSpacing(10)
+        self.btn_prev = QPushButton("הקודם  ◄")
+        self.btn_prev.setObjectName("btn_secondary")
+        self.btn_prev.setMinimumHeight(30)
+        self.btn_prev.setFixedWidth(110)
+        self.btn_prev.clicked.connect(self._prev_page)
+        self.lbl_page = QLabel("")
+        self.lbl_page.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_page.setStyleSheet("font-size: 12px; color: #424242; font-weight: bold;")
+        self.btn_next = QPushButton("►  הבא")
+        self.btn_next.setObjectName("btn_secondary")
+        self.btn_next.setMinimumHeight(30)
+        self.btn_next.setFixedWidth(110)
+        self.btn_next.clicked.connect(self._next_page)
+        paging_row.addWidget(self.btn_prev)
+        paging_row.addStretch()
+        paging_row.addWidget(self.lbl_page)
+        paging_row.addStretch()
+        paging_row.addWidget(self.btn_next)
+        root.addLayout(paging_row)
+
         # ── Pallet assignment bar ─────────────────────────────────────────────
         assign_frame = QFrame(); assign_frame.setObjectName("card")
         assign_lay = QHBoxLayout(assign_frame)
@@ -368,20 +393,17 @@ class InventoryScreen(QWidget):
             else "שלב 1: בחירת איתור להעברה"
         )
 
-        all_rows = db.get_inventory_with_assignments(pn, "", "", bin_, MAX_ROWS)
-        if cat:
-            all_rows = [r for r in all_rows if cat.lower() in str(r["Cat"] or "").lower()]
-        if dest:
-            all_rows = [r for r in all_rows if dest.lower() in str(r["DestArea"] or "").lower()]
+        all_rows = db.get_inventory_with_assignments(pn, bin_=bin_, cat=cat, dest_area=dest)
         if pallet_f is not None:
             all_rows = [r for r in all_rows if r["PalletID"] == pallet_f]
         if self.chk_no_pallet.isChecked():
             all_rows = [r for r in all_rows if r["PalletID"] is None]
-        truncated  = len(all_rows) > MAX_ROWS
-        self._rows = [{k: r[k] for k in r.keys()} for r in all_rows[:MAX_ROWS]]
+
+        self._filtered_rows = [{k: r[k] for k in r.keys()} for r in all_rows]
+        self._page = 0
         self._apply_sort()
         self._refresh_pallet_combo()
-        self._populate_table(truncated)
+        self._show_page()
 
     def _clear_filter(self):
         self.txt_pn.clear()
@@ -392,6 +414,33 @@ class InventoryScreen(QWidget):
         self.chk_no_pallet.setChecked(False)
         self.chk_no_pallet.blockSignals(False)
         self._search()
+
+    # ── Paging ────────────────────────────────────────────────────────────────
+
+    def _show_page(self):
+        total  = len(self._filtered_rows)
+        pages  = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+        start  = self._page * PAGE_SIZE
+        end    = min(start + PAGE_SIZE, total)
+        self._rows = self._filtered_rows[start:end]
+
+        if total == 0:
+            self.lbl_page.setText("")
+        else:
+            self.lbl_page.setText(f"עמוד {self._page + 1} מתוך {pages}  |  שורות {start + 1}–{end} מתוך {total}")
+        self.btn_prev.setEnabled(self._page > 0)
+        self.btn_next.setEnabled(end < total)
+        self._populate_table()
+
+    def _prev_page(self):
+        if self._page > 0:
+            self._page -= 1
+            self._show_page()
+
+    def _next_page(self):
+        if (self._page + 1) * PAGE_SIZE < len(self._filtered_rows):
+            self._page += 1
+            self._show_page()
 
     # ── Sorting ───────────────────────────────────────────────────────────────
 
@@ -406,23 +455,22 @@ class InventoryScreen(QWidget):
         order = Qt.SortOrder.AscendingOrder if self._sort_asc else Qt.SortOrder.DescendingOrder
         self.table.horizontalHeader().setSortIndicator(col, order)
         self._apply_sort()
-        self._populate_table()
+        self._page = 0
+        self._show_page()
 
     def _apply_sort(self):
         if self._sort_col in _SORT_KEY:
             key_fn = _SORT_KEY[self._sort_col]
-            self._rows.sort(key=key_fn, reverse=not self._sort_asc)
+            self._filtered_rows.sort(key=key_fn, reverse=not self._sort_asc)
 
     # ── Table population ──────────────────────────────────────────────────────
 
-    def _populate_table(self, truncated: bool = False):
-        rows = self._rows
-        n    = len(rows)
+    def _populate_table(self):
+        rows  = self._rows
+        n     = len(rows)
+        total = len(self._filtered_rows)
 
-        msg = f"נמצאו: {n} שורות"
-        if truncated:
-            msg += f"  ← מוצגים {MAX_ROWS} הראשונים בלבד"
-        self.lbl_count.setText(msg)
+        self.lbl_count.setText(f"נמצאו: {total} שורות")
 
         pn_to_bins = {}
         for row in rows:

@@ -267,7 +267,8 @@ def set_user_active(user_id: int, active: bool, changed_by: str = ""):
 # ── Inventory ─────────────────────────────────────────────────────────────────
 
 def get_inventory_with_assignments(pn="", storage="", area="", bin_="",
-                                    limit=500, unassigned_only=False):
+                                    limit=0, unassigned_only=False,
+                                    cat="", dest_area=""):
     sql = """
         SELECT i.InventoryID, i.Cat, i.Pn, i.UnitOfMeasure, i.Batch, i.WBS,
                i.Storage, i.Area, i.Bin, i.DestArea, i.Qty, i.MultiLocation,
@@ -279,16 +280,22 @@ def get_inventory_with_assignments(pn="", storage="", area="", bin_="",
     """
     params: list = []
     if pn:
-        sql += " AND i.Pn LIKE ?";      params.append(f"%{pn}%")
+        sql += " AND i.Pn LIKE ?";          params.append(f"%{pn}%")
+    if cat:
+        sql += " AND i.Cat LIKE ?";         params.append(f"%{cat}%")
     if storage:
-        sql += " AND i.Storage = ?";    params.append(storage)
+        sql += " AND i.Storage = ?";        params.append(storage)
     if area:
-        sql += " AND i.Area = ?";       params.append(area)
+        sql += " AND i.Area = ?";           params.append(area)
     if bin_:
-        sql += " AND i.Bin = ?";        params.append(bin_)
+        sql += " AND i.Bin = ?";            params.append(bin_)
+    if dest_area:
+        sql += " AND i.DestArea LIKE ?";    params.append(f"%{dest_area}%")
     if unassigned_only:
         sql += " AND pa.PalletID IS NULL"
-    sql += f" ORDER BY i.Pn, i.Batch LIMIT {int(limit) + 1}"
+    sql += " ORDER BY i.Pn, i.Batch"
+    if limit:
+        sql += f" LIMIT {int(limit)}"
     with get_conn() as c:
         return c.execute(sql, params).fetchall()
 
