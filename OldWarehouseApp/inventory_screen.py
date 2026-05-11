@@ -508,7 +508,12 @@ class InventoryScreen(QWidget):
             qty_val = row["Qty"]
             qty_str = (str(int(qty_val)) if qty_val == int(qty_val) else str(qty_val)) if qty_val is not None else ""
 
-            self.table.setItem(r, COL_PN,    mk(row["Pn"],  bold=True))
+            pn_item = mk(row["Pn"], bold=True)
+            if str(row.get("Serial") or "").strip() == "Z001":
+                pn_item.setBackground(QBrush(QColor("#FF8C00")))
+                pn_item.setForeground(QBrush(QColor("white")))
+                pn_item.setToolTip("Serial: Z001")
+            self.table.setItem(r, COL_PN,    pn_item)
             self.table.setItem(r, COL_CAT,   mk(row["Cat"]))
             self.table.setItem(r, COL_BATCH, mk(row["Batch"]))
             self.table.setItem(r, COL_WBS,   mk(row["WBS"]))

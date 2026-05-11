@@ -6,7 +6,7 @@ from datetime import datetime
 
 # DB field names used throughout the app
 INVENTORY_COLUMNS = ["Cat", "Pn", "UnitOfMeasure", "Batch", "WBS",
-                     "Storage", "Area", "Bin", "DestArea", "Qty", "MultiLocation"]
+                     "Storage", "Area", "Bin", "DestArea", "Qty", "MultiLocation", "Serial"]
 
 # Maps every known Hebrew header from STOCK.xlsx to the DB field name
 STOCK_HEADER_MAP = {
@@ -22,6 +22,7 @@ STOCK_HEADER_MAP = {
     "מלאי זמין":                             "Qty",
     "אסטרטגיה ייעודית":                      "DestArea",
     "האם לפריט קיים יותר מאיתור יחיד":       "MultiLocation",
+    "Serial":                                "Serial",
 }
 
 HEADER_FILL   = PatternFill("solid", fgColor="1976D2")

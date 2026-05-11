@@ -79,6 +79,7 @@ def init_db():
             ("IsInStock",      "INTEGER NOT NULL DEFAULT 0"),
             ("UpdatedQty",     "REAL"),
             ("Notes",          "TEXT"),
+            ("Serial",         "TEXT"),
         ]:
             try:
                 c.execute(f"ALTER TABLE InventoryOld ADD COLUMN {col} {defn}")
@@ -507,8 +508,8 @@ def bulk_insert_inventory(rows: list[dict]):
         for r in rows:
             c.execute(
                 """INSERT OR IGNORE INTO InventoryOld
-                   (Cat,Pn,UnitOfMeasure,Batch,WBS,Storage,Area,Bin,DestArea,Qty,MultiLocation)
-                   VALUES (:Cat,:Pn,:UnitOfMeasure,:Batch,:WBS,:Storage,:Area,:Bin,:DestArea,:Qty,:MultiLocation)""",
+                   (Cat,Pn,UnitOfMeasure,Batch,WBS,Storage,Area,Bin,DestArea,Qty,MultiLocation,Serial)
+                   VALUES (:Cat,:Pn,:UnitOfMeasure,:Batch,:WBS,:Storage,:Area,:Bin,:DestArea,:Qty,:MultiLocation,:Serial)""",
                 r,
             )
         c.commit()
